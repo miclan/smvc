@@ -29,6 +29,8 @@ public class NewsController {
 
 	private static final Logger logger = LoggerFactory.getLogger(NewsController.class);
 	private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.78 Safari/537.36";
+	private static final String KEY_FOR_QUERY = "06FC99B42D4707B201978C830F060EEA";
+	private static final String KEY_FOR_ADMIN = "42E0F87885ED972027A96FEDEC0E4719";
 
 	@RequestMapping(value = "/huawei", method = RequestMethod.GET, produces = "application/json; charset=UTF-8")
 	public @ResponseBody String getHuawei(@RequestParam(value = "url", required = false) String paramUrl)
@@ -48,6 +50,10 @@ public class NewsController {
 			String url = link.absUrl("href");
 			if (url.matches("http[s]{0,1}://www\\.huawei\\.com/cn/news/[\\d]{4}/[\\d]{1,2}/[^/]+")) {
 				if (set.contains(url)) {
+					logger.info("SKIP-A " + url);
+					continue;
+				} else if (existsInAzure(url)) {
+					logger.info("SKIP-B " + url);
 					continue;
 				} else {
 					set.add(url);
@@ -95,6 +101,10 @@ public class NewsController {
 			if (url.matches(
 					"http[s]{0,1}://[a-z\\.]+\\.sina\\.com\\.cn/[A-Za-z/]+/[\\d]{4}\\-[\\d]{2}\\-[\\d]{2}/[^/]+\\.shtml")) {
 				if (set.contains(url)) {
+					logger.info("SKIP-A " + url);
+					continue;
+				} else if (existsInAzure(url)) {
+					logger.info("SKIP-B " + url);
 					continue;
 				} else {
 					set.add(url);
@@ -157,6 +167,10 @@ public class NewsController {
 			String url = link.absUrl("href");
 			if (url.matches("http[s]{0,1}://[a-z\\.]+\\.qq\\.com/[A-Za-z/]+/[\\d]{8}/[^/]+\\.htm")) {
 				if (set.contains(url)) {
+					logger.info("SKIP-A " + url);
+					continue;
+				} else if (existsInAzure(url)) {
+					logger.info("SKIP-B " + url);
 					continue;
 				} else {
 					set.add(url);
@@ -201,15 +215,35 @@ public class NewsController {
 		// }
 		// ]
 		// }
+		if (jaDocs.size() == 0) {
+			return "No NEW docs created.";
+		}
 		JSONObject joAzure = new JSONObject();
 		joAzure.put("value", jaDocs);
 
 		logger.info(joAzure.toJSONString());
 		Response response = Request
 				.Post("https://lanchao-search.search.windows.net/indexes/web-news/docs/index?api-version=2016-09-01")
-				.addHeader("Content-Type", "application/json").addHeader("api-key", "42E0F87885ED972027A96FEDEC0E4719")
+				.addHeader("Content-Type", "application/json").addHeader("api-key", KEY_FOR_ADMIN)
 				.bodyString(joAzure.toJSONString(), ContentType.APPLICATION_JSON).execute();
 
 		return response.returnContent().asString();
+	}
+
+	private boolean existsInAzure(String url) {
+		// https://lanchao-search.search.windows.net/indexes/web-news/docs/1925407681?api-version=2016-09-01
+		try {
+			Response response = Request
+					.Get("https://lanchao-search.search.windows.net/indexes/web-news/docs/" + url.hashCode()
+							+ "?api-version=2016-09-01")
+					.addHeader("Content-Type", "application/json").addHeader("api-key", KEY_FOR_QUERY).execute();
+			if (200 == response.returnResponse().getStatusLine().getStatusCode()) {
+				return true;
+			} else {
+				return false;
+			}
+		} catch (IOException e) {
+			return false;
+		}
 	}
 }
